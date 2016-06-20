@@ -24,11 +24,10 @@ public class NB implements Serializable {
     SparkConf sparkConf = new SparkConf().setAppName("Naive Bayes");
     JavaSparkContext sc = new JavaSparkContext(sparkConf);
 
-    String dir = "~/Documents/workspace/ML/src/NB_5/";
-    String posPath = dir + "pos.even.train";
-    String negPath = dir + "neg.even.train";
-    String testPosPath = dir + "pos.odd.test";
-    String testNegPath = dir + "neg.odd.test";
+    String posPath = "file path for pos training data";
+    String negPath = "file path for neg training data";
+    String testPosPath = "file path for pos testing data";
+    String testNegPath = "file path for neg testing data";
     JavaRDD<String> pos = sc.textFile(posPath);
     JavaRDD<String> neg = sc.textFile(negPath);
     JavaRDD<String> testpos = sc.textFile(testPosPath);
