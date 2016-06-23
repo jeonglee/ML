@@ -52,15 +52,6 @@ public class NB implements Serializable {
       }
     });
 
-    // JavaRDD<Vector> predictProbabilities = test.map(new Function<String,Double>() {
-    //   @Override
-    //   public Vector call(String line) {
-    //     WordParser p = new WordParser(line);
-    //     HashingTF t = new HashingTF();
-    //     return model.predictProbabilities(t.transform(Arrays.asList(p.parse())));
-    //   }
-    // });
-
     obj.printPrediction(prediction);
   }
 
