@@ -35,11 +35,22 @@ public class NB implements Serializable {
     JavaRDD<LabeledPoint> trainingData = jData.union(cData);
     final NaiveBayesModel model = NaiveBayes.train(trainingData.rdd(), 1.0);
 
+    System.out.println("pi length: " + model.pi().length);
+    for (double d : model.labels()) {
+      System.out.println("class: " + d + " prior probability: " + model.pi()[(int) d]);
+    }
+    for (double[] arr : model.theta()) {
+      System.out.println(arr.length);
+      for (double d : arr) {
+        System.out.println(d);
+      }
+    }
+
     JavaRDD<Double> prediction = test.map(new Function<String,Double>() {
       @Override
       public Double call(String line) {
         WordParser p = new WordParser(line);
-        HashingTF t = new HashingTF();
+        HashingTF t = new HashingTF(6);
         Vector v = t.transform(Arrays.asList(p.parse()));
 
         /* predict probabilities */
@@ -62,7 +73,11 @@ public class NB implements Serializable {
       @Override
       public LabeledPoint call(String line) {
         WordParser p = new WordParser(line);
-        HashingTF t = new HashingTF();
+        HashingTF t = new HashingTF(6);
+        System.out.println("the words as parsed");
+        for (String s : p.parse()) {
+          System.out.println(s);
+        }
         return new LabeledPoint(l, t.transform(Arrays.asList(p.parse())));
       }
     });
