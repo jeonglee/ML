@@ -24,17 +24,17 @@ public class NB implements Serializable {
     SparkConf sparkConf = new SparkConf().setAppName("Naive Bayes");
     JavaSparkContext sc = new JavaSparkContext(sparkConf);
 
-    JavaRDD<String> pos = sc.textFile("chinese.train");
-    JavaRDD<String> neg = sc.textFile("japanese.train");
-    JavaRDD<String> testpos = sc.textFile("chinese.test");
-    JavaRDD<String> testneg = sc.textFile("japanese.test");
+    JavaRDD<String> pos = sc.textFile("sqli.train");
+    JavaRDD<String> neg = sc.textFile("nonsqli.train");
+    JavaRDD<String> testpos = sc.textFile("sqli.test");
+    JavaRDD<String> testneg = sc.textFile("nonsqli.test");
 
     NB obj = new NB();
-    JavaRDD<LabeledPoint> posData = obj.getLabeledPoint(pos, 1, false);
-    JavaRDD<LabeledPoint> negData = obj.getLabeledPoint(neg, 0, false);
+    JavaRDD<LabeledPoint> posData = obj.getLabeledPoint(pos, 1, false, false);
+    JavaRDD<LabeledPoint> negData = obj.getLabeledPoint(neg, 0, false, false);
     JavaRDD<LabeledPoint> trainingData = posData.union(negData);
-    JavaRDD<LabeledPoint> testposData = obj.getLabeledPoint(testpos, 1, false);
-    JavaRDD<LabeledPoint> testnegData = obj.getLabeledPoint(testneg, 0, false);
+    JavaRDD<LabeledPoint> testposData = obj.getLabeledPoint(testpos, 1, false, false);
+    JavaRDD<LabeledPoint> testnegData = obj.getLabeledPoint(testneg, 0, false, false);
     JavaRDD<LabeledPoint> testingData = testposData.union(testnegData);
     final NaiveBayesModel model = NaiveBayes.train(trainingData.rdd(), 1.0);
 
@@ -56,17 +56,18 @@ public class NB implements Serializable {
       System.out.println("Accuracy: " + accuracy);
   }
 
-  JavaRDD<LabeledPoint> getLabeledPoint(JavaRDD<String> srdd, int label, boolean useidf) {
+  JavaRDD<LabeledPoint> getLabeledPoint(JavaRDD<String> srdd, int label, boolean urldecode, boolean useidf) {
     final HashingTF hashingTF = new HashingTF();
     final IDF idf = new IDF();
     final int l = label;
+    final boolean decode = urldecode;
 
     if (useidf) {
       /* calculate term frequencies */
       JavaRDD<Vector> tf = srdd.map(new Function<String, Vector>() {
         @Override
         public Vector call(String line) {
-          WordParser p = new WordParser(line);
+          WordParser p = new WordParser(line, decode);
           return hashingTF.transform(Arrays.asList(p.parse()));
         }
       });
@@ -85,7 +86,7 @@ public class NB implements Serializable {
       return srdd.map(new Function<String, LabeledPoint>() {
         @Override
         public LabeledPoint call(String line) {
-          WordParser p = new WordParser(line);
+          WordParser p = new WordParser(line, decode);
           return new LabeledPoint(l, hashingTF.transform(Arrays.asList(p.parse())));
         }
       });

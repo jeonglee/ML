@@ -1,4 +1,6 @@
 import java.util.Arrays;
+import java.net.URLDecoder;
+import java.io.UnsupportedEncodingException;
 
 public class WordParser {
 	private String s;
@@ -7,10 +9,20 @@ public class WordParser {
 	private int i = 0;    /* position in wordlist */
 	private int pos = 0;  /* position in string */
 
-	public WordParser(String s) {
-		this.s = s;
-		this.slen = s.length();
-		this.wordlist = new String[s.length()];
+	public WordParser(String s, boolean urldecode) {
+		if (urldecode) {
+			try {
+				this.s = URLDecoder.decode(s, "UTF-8");
+				this.slen = this.s.length();
+				this.wordlist = new String[this.s.length()];
+			} catch (UnsupportedEncodingException ex) {
+				System.out.println("error while url decoding");
+			}
+		} else {
+			this.s = s;
+			this.slen = s.length();
+			this.wordlist = new String[s.length()];
+		}
 	}
 
 	public int getWordCount() {
