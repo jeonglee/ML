@@ -5,7 +5,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.function.*;
 import org.apache.spark.mllib.linalg.Vector;
-import org.apache.spark.api.java.function.VoidFunction;
 import java.util.Iterator;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.mllib.classification.*;
@@ -25,73 +24,72 @@ public class NB implements Serializable {
     SparkConf sparkConf = new SparkConf().setAppName("Naive Bayes");
     JavaSparkContext sc = new JavaSparkContext(sparkConf);
 
-    JavaRDD<String> chinese = sc.textFile("chinese.txt");
-    JavaRDD<String> japanese = sc.textFile("japanese.txt");
-    JavaRDD<String> test = sc.textFile("test.txt");
+    JavaRDD<String> pos = sc.textFile("chinese.train");
+    JavaRDD<String> neg = sc.textFile("japanese.train");
+    JavaRDD<String> testpos = sc.textFile("chinese.test");
+    JavaRDD<String> testneg = sc.textFile("japanese.test");
 
     NB obj = new NB();
-    JavaRDD<LabeledPoint> cData = obj.getLabeledPoint(chinese, 1);
-    JavaRDD<LabeledPoint> jData = obj.getLabeledPoint(japanese, 0);
-    JavaRDD<LabeledPoint> trainingData = jData.union(cData);
+    JavaRDD<LabeledPoint> posData = obj.getLabeledPoint(pos, 1, false);
+    JavaRDD<LabeledPoint> negData = obj.getLabeledPoint(neg, 0, false);
+    JavaRDD<LabeledPoint> trainingData = posData.union(negData);
+    JavaRDD<LabeledPoint> testposData = obj.getLabeledPoint(testpos, 1, false);
+    JavaRDD<LabeledPoint> testnegData = obj.getLabeledPoint(testneg, 0, false);
+    JavaRDD<LabeledPoint> testingData = testposData.union(testnegData);
     final NaiveBayesModel model = NaiveBayes.train(trainingData.rdd(), 1.0);
 
-    System.out.println("pi length: " + model.pi().length);
-    for (double d : model.labels()) {
-      System.out.println("class: " + d + " prior probability: " + model.pi()[(int) d]);
-    }
-    for (double[] arr : model.theta()) {
-      System.out.println(arr.length);
-      for (double d : arr) {
-        System.out.println(d);
-      }
-    }
+    JavaPairRDD<Double, Double> predictionAndLabel =
+      testingData.mapToPair(new PairFunction<LabeledPoint, Double, Double>() {
+        @Override
+        public Tuple2<Double, Double> call(LabeledPoint p) {
+          return new Tuple2<Double, Double>(model.predict(p.features()), p.label());
+        }
+      });
 
-    JavaRDD<Double> prediction = test.map(new Function<String,Double>() {
-      @Override
-      public Double call(String line) {
-        WordParser p = new WordParser(line);
-        HashingTF t = new HashingTF(6);
-        Vector v = t.transform(Arrays.asList(p.parse()));
-
-        /* predict probabilities */
-        System.out.println("INPUT: " + line);
-        double[] probs = model.predictProbabilities(v).toArray();
-        System.out.println("Japanese: " + probs[0]);
-        System.out.println("Chinese: " + probs[1]);
-
-        return model.predict(v);
-      }
-    });
-
-    obj.printPrediction(prediction);
+      double accuracy = predictionAndLabel.filter(new Function<Tuple2<Double, Double>, Boolean>() {
+        @Override
+        public Boolean call(Tuple2<Double, Double> pl) {
+          return pl._1().equals(pl._2());
+        }
+      }).count() / (double) testingData.count();
+      System.out.println("Number tested: " + testingData.count());
+      System.out.println("Accuracy: " + accuracy);
   }
 
-  JavaRDD<LabeledPoint> getLabeledPoint(JavaRDD<String> srdd, int label) {
+  JavaRDD<LabeledPoint> getLabeledPoint(JavaRDD<String> srdd, int label, boolean useidf) {
+    final HashingTF hashingTF = new HashingTF();
+    final IDF idf = new IDF();
     final int l = label;
 
-    return srdd.map(new Function<String, LabeledPoint>() {
-      @Override
-      public LabeledPoint call(String line) {
-        WordParser p = new WordParser(line);
-        HashingTF t = new HashingTF(6);
-        System.out.println("the words as parsed");
-        for (String s : p.parse()) {
-          System.out.println(s);
+    if (useidf) {
+      /* calculate term frequencies */
+      JavaRDD<Vector> tf = srdd.map(new Function<String, Vector>() {
+        @Override
+        public Vector call(String line) {
+          WordParser p = new WordParser(line);
+          return hashingTF.transform(Arrays.asList(p.parse()));
         }
-        return new LabeledPoint(l, t.transform(Arrays.asList(p.parse())));
-      }
-    });
+      });
+      tf.cache();
+      final IDFModel idfModel = idf.fit(tf); /* calculate inverse document frequencies */
+      JavaRDD<Vector> tfidf = idfModel.transform(tf); /* create tf-idf vector */
+      /* convert RDD of tfidf Vectors to RDD of LabeledPoints */
+      JavaRDD<LabeledPoint> result = tfidf.map(new Function<Vector, LabeledPoint>() {
+        @Override
+        public LabeledPoint call(Vector v) {
+          return new LabeledPoint(l, v);
+        }
+      });
+      return result;
+    } else {
+      return srdd.map(new Function<String, LabeledPoint>() {
+        @Override
+        public LabeledPoint call(String line) {
+          WordParser p = new WordParser(line);
+          return new LabeledPoint(l, hashingTF.transform(Arrays.asList(p.parse())));
+        }
+      });
+    }
   }
 
-  void printPrediction(JavaRDD<Double> drdd) {
-    drdd.foreach(new VoidFunction<Double>() {
-      public void call(Double d) {
-        if (d == 1) {
-          System.out.println("Prediction: Chinese\n");
-        } else {
-          System.out.println("Prediction: Japanese\n");
-        }
-      }
-    });
-  }
 }
